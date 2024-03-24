@@ -12,6 +12,15 @@ from multiprocessing.pool import Pool
 
 
 THREADS_AMOUNT: Final[int] = 4
+EMOTIONS_GRAPH_INTERPRETATION: Final[dict[Emotions, float]] = {
+    Emotions.NEUTRAL: 0.0,
+    Emotions.ANGRY: -0.75,
+    Emotions.SAD: -0.5,
+    Emotions.DISGUST: -0.25,
+    Emotions.FEAR: -1.0,
+    Emotions.SURPRISE: 0.5,
+    Emotions.HAPPY: 1.0
+}
 
 
 class EmotionsMeasurer:
@@ -46,6 +55,7 @@ class EmotionsMeasurer:
             self._frames_amount = get_amount_of_frames(self._video_capture)
         self._emotions_occurances: dict[Emotions, int] = dict()
         self._looked_away = 0
+        self._coordinates: list[Tuple[int, float]] = list()
 
     def analyse_prepared_video(self) -> None:
         """
@@ -67,7 +77,7 @@ class EmotionsMeasurer:
             (self._frames_arrays[i], i + 1) \
                 for i in range(self._thread_amount)
         ]
-        results: list[dict[Emotions], int] = list()
+        results: list[dict[Emotions], int, list[Tuple[int, float]]] = list()
         with Pool(processes=self._thread_amount) as pool:
             try:
                 results = pool.starmap(
@@ -89,6 +99,15 @@ class EmotionsMeasurer:
                 self._emotions_occurances[Emotions(emotion)] += \
                     result[0][emotion]
             self._looked_away += result[1]
+            for coordinate in result[2]:
+                self._coordinates.append(
+                    (
+                        results.index(result) * \
+                            (self._frames_amount // self._thread_amount) + \
+                                coordinate[0],
+                        coordinate[1],
+                    )
+                )
 
     def analyze_realtime(self) -> None:
         """Analyze emotions in realtime from camera."""
@@ -134,6 +153,14 @@ class EmotionsMeasurer:
                         (255, 0, 0), 
                         3,       
                     )
+                    self._coordinates.append(
+                        (
+                            self._frames_amount - 1,
+                            EMOTIONS_GRAPH_INTERPRETATION[
+                                Emotions(emotion_model.dominant_emotion)
+                            ]
+                        )
+                    )
                 except ValidationError:
                     try:
                         dominant = emotion['dominant_emotion']
@@ -149,6 +176,14 @@ class EmotionsMeasurer:
                             0.9,
                             (255, 0, 0), 
                             3,       
+                        )
+                        self._coordinates.append(
+                            (
+                                self._frames_amount - 1,
+                                EMOTIONS_GRAPH_INTERPRETATION[
+                                    Emotions(dominant)
+                                ]
+                            )
                         )
                     except KeyError:
                         continue

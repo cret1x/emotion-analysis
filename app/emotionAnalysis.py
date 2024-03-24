@@ -104,13 +104,13 @@ python emotionsAnalysis.py -i <file_destination> -t <threads_amount> -m <mode>
                     frame_analyzer._emotions_occurances,
                     frame_analyzer._looked_away,
                     frame_analyzer._frames_amount,
+                    frame_analyzer._coordinates,
                 )
             except Exception as ex:
                 print(
                     '[WARNING] Exception raised while generating latex report: '
                     f'{ex}.'
                 )
-
         else:
             print('''
 [INFO] Instruction for emotions analyzer:

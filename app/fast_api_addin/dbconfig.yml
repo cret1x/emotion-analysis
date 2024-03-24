@@ -1,0 +1,6 @@
+db_parameters:
+  username: "postgres"
+  password: "123456"
+  url: "localhost"
+  port: 5432
+  db_name: "postgres"
