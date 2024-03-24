@@ -327,7 +327,7 @@ def generate_latex_report_from_result_dictionary(
             'Lower there is an interpretation of emotional shifts via graphic.\n'
         )
         with document.create(TikZ()):
-            plot_options = 'height=25cm, width=20cm'#, grid=major'
+            plot_options = 'height=25cm, width=20cm'
             with document.create(Axis(options=plot_options)) as plot:
                 plot.append(Plot(name='emotional report', coordinates=coordinates))
     document.generate_pdf(

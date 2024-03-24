@@ -11,7 +11,7 @@ from app.data_models.models import EmotionalReport, Emotions
 from multiprocessing.pool import Pool
 
 
-THREADS_AMOUNT: Final[int] = 4
+THREADS_AMOUNT: Final[int] = 6
 EMOTIONS_GRAPH_INTERPRETATION: Final[dict[Emotions, float]] = {
     Emotions.NEUTRAL: 0.0,
     Emotions.ANGRY: -0.75,

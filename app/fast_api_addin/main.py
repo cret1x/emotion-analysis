@@ -8,10 +8,38 @@ import boto3
 from app.emotions_measurer.measurer import EmotionsMeasurer
 from app.utils.utility_functions import get_percentages_from_results
 from starlette.responses import Response
-
+from fastapi.middleware.cors import CORSMiddleware
+from app.utils.utility_functions import generate_latex_report_from_result_dictionary
 
 app = FastAPI()
 models.Base.metadata.create_all(bind=engine)
+
+origins = [
+    "http://localhost:3000",
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=['*'],
+    allow_headers=['*'],
+)
+
+
+class ReportResultsBase(BaseModel):
+    id: int
+    reportResultId: int
+    neutral: float
+    angry: float
+    disgust: float
+    fear: float
+    happy: float
+    sad: float
+    surprise: float
+    lookedAway: float
+
+    class Config:
+        orm_mode = True
 
 
 class S3CredentialsBase(BaseModel):
@@ -25,6 +53,9 @@ class S3CredentialsBase(BaseModel):
     bucket_name: str
     key_name: str
 
+    class Config:
+        orm_mode = True
+
 
 def get_db():
     db = SessionLocal()
@@ -37,7 +68,7 @@ def get_db():
 db_dependency = Annotated[Session, Depends(get_db)]
 
 
-@app.post('/requestReport')
+@app.post('/requestReport/')
 async def requestReport(credentials: S3CredentialsBase, db: db_dependency):
     try:
         client = boto3.client(
@@ -83,12 +114,18 @@ async def requestReport(credentials: S3CredentialsBase, db: db_dependency):
             )
             db.add(reportResultData)
             db.commit()
+            generate_latex_report_from_result_dictionary(
+                measurer._emotions_occurances,
+                measurer._looked_away,
+                measurer._frames_amount,
+                measurer._coordinates,
+            )
             return Response(content=str(reportResult.id), status_code=200)
     except Exception as ex:
         return Response(content=ex, status_code=404)
 
 
-@app.get("/getReportResult/{reportResultId}")
+@app.get("/getReportResult/{reportResultId}/", response_model=ReportResultsBase)
 async def getReportResult(reportResultId: int, db: db_dependency):
     result = db.query(
         models.EmotionReportData
@@ -98,3 +135,20 @@ async def getReportResult(reportResultId: int, db: db_dependency):
     if not result:
         raise HTTPException(status_code=404, detail='No such report result.')
     return result
+
+@app.get("/getReportResults/", response_model=List[ReportResultsBase])
+async def getReportResults(db: db_dependency):
+    result = db.query(
+        models.EmotionReportData
+    )
+    if not result:
+        return Response(content='No reports', status_code=404)
+    return result
+
+@app.get("/getLastReport/")
+async def getLastReport():
+    pdf_bytes = open('emotional_report.pdf', 'rb').read()
+    response = Response(content=pdf_bytes)
+    response.headers['Content-Disposition'] = 'attachment; filename="emotional_report.pdf"'
+    response.headers['Content-Type'] = 'application/pdf'
+    return response
