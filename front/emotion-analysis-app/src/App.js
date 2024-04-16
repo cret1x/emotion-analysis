@@ -5,6 +5,31 @@ import CloakLoader from "react-spinners/ClockLoader";
 
 const App = () => {
 
+
+  const [resultId, setResultId] = useState('');
+
+  const handleResultChange = (e) => {
+    setResultId(e.target.value);
+  };
+
+  const handleDownload = () => {
+    api.post("/uploadReport/")
+  }
+
+  const downloadById = () => {
+    const id = parseInt(resultId);
+    api.get(`/getReportFromS3/${id}/`, {
+      responseType: 'blob',
+    }).then(response => {
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'emotional_report.pdf');
+      document.body.appendChild(link);
+      link.click();
+    });
+  }
+
   const downloadFile = (url) => {
     api.get("/getLastReport/", {
       responseType: 'blob',
@@ -130,11 +155,34 @@ const App = () => {
               data-testid="CloakLoader"
             />
           </div>
-
         </form>
+      </div>
+      <div>
+        <nav className='navbar navbar-dark bg-primary'>
+        <div className='container-fluid'>
+          <a className='navbar-brand' href='#'>
+            Results analysis
+          </a>
+        </div>
+        </nav>
         
         <div className="mb-3 mt-3">
           <button className='btn btn-primary' onClick={() => downloadFile()}>Download last report</button>
+        </div>
+
+        <div className="mb-3 mt-3">
+          <button className='btn btn-primary' onClick={() => handleDownload()}>Upload last report</button>
+        </div>
+
+        <div className='mb-3'>
+            <label htmlFor='resultId' className="form-label">
+              Report result id
+            </label>
+            <input type='text' className='form-control' id='resultId' name='resultId' onChange={handleResultChange} value={resultId}/>
+        </div>
+
+        <div className="mb-3 mt-3">
+          <button className='btn btn-primary' onClick={() => downloadById()}>Download report by id</button>
         </div>
 
         <table className='table table-striped table-bordered table-hover'>

@@ -56,6 +56,7 @@ class EmotionsMeasurer:
         self._emotions_occurances: dict[Emotions, int] = dict()
         self._looked_away = 0
         self._coordinates: list[Tuple[int, float]] = list()
+        self._best_performance = dict()
 
     def analyse_prepared_video(self) -> None:
         """
@@ -108,9 +109,16 @@ class EmotionsMeasurer:
                         coordinate[1],
                     )
                 )
+            for emotion in result[3].keys():
+                if Emotions(emotion) not in \
+                        self._best_performance.keys():
+                    self._best_performance[Emotions(emotion)] = list()
+                self._best_performance[Emotions(emotion)].append(result[3][emotion])
 
     def analyze_realtime(self) -> None:
         """Analyze emotions in realtime from camera."""
+        best_performance_frame = dict()
+        best_confidence = dict()
         brows_predictor = cv2.CascadeClassifier(
             cv2.data.haarcascades + 'haarcascade_eye_tree_eyeglasses.xml'
         )
@@ -141,6 +149,17 @@ class EmotionsMeasurer:
                         self._emotions_occurances[
                             Emotions(emotion_model.dominant_emotion)
                         ] = 0
+                        best_confidence[
+                            Emotions(emotion_model.dominant_emotion)
+                        ] = -1
+                    if best_confidence[Emotions(emotion_model.dominant_emotion)] < \
+                            emotion_model.face_confidence:
+                        best_performance_frame[
+                            Emotions(emotion_model.dominant_emotion)
+                        ] = frame
+                        best_confidence[
+                            Emotions(emotion_model.dominant_emotion)
+                        ] = emotion_model.face_confidence
                     self._emotions_occurances[
                         Emotions(emotion_model.dominant_emotion)
                     ] += 1
@@ -167,6 +186,9 @@ class EmotionsMeasurer:
                         if Emotions(dominant) not in \
                                 self._emotions_occurances.keys():
                             self._emotions_occurances[Emotions(dominant)] = 0
+                            self._best_performance[
+                                Emotions(dominant)
+                            ] = -1
                         self._emotions_occurances[Emotions(dominant)] += 1
                         cv2.putText(
                             frame,
@@ -192,3 +214,5 @@ class EmotionsMeasurer:
                 break
         self._video_capture.release()
         cv2.destroyAllWindows()
+        for emotion in best_performance_frame:
+            self._best_performance[Emotions(emotion)] = [best_performance_frame[emotion]]

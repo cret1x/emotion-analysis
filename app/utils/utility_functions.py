@@ -1,5 +1,8 @@
 from datetime import datetime
 import os
+from os import listdir
+from os.path import isfile, join
+from time import sleep
 from typing import Final, Tuple
 from cv2 import VideoCapture
 import cv2
@@ -13,6 +16,8 @@ from pylatex import (
     TikZ,
     Plot,
     Axis,
+    Subsection,
+    Figure,
 )
 
 
@@ -77,6 +82,27 @@ def separate_frames_into_arrays(
     return frames_per_thread
 
 
+def validate_file_input(
+        folder: str,
+        threads_amount: str
+) -> Tuple[bool, bool]:
+    if threads_amount != '' and (not threads_amount.isdigit()):
+        if threads_amount.startswith('-'):
+            return (
+                False,
+                'Threads amount is expected to be a non-negative integer.'
+            )
+        return (
+            False,
+            'Threads amount is supposed to be an integer.'
+        )
+    if threads_amount == '0':
+        return (
+            False,
+            'Threads amount is supposed to be a non-zero integer.'
+        )
+    return (True, '')
+
 def validate_input(
         filename: str,
         threads_amount: str,
@@ -129,7 +155,7 @@ def validate_input(
 def analyze_several_frames(
         frames: list,
         thread: int
-) -> Tuple[dict[Emotions, int], int, list[Tuple[int, float]]]:
+) -> Tuple[dict[Emotions, int], int, list[Tuple[int, float]], dict]:
     """
     Analyze frames for emotions.
     
@@ -140,6 +166,8 @@ def analyze_several_frames(
     4. The reports are being validated by BaseModel and the report is passed back.
     """
     coordinates: list[Tuple[int, float]] = list()
+    best_performance_frame = dict()
+    best_confidence = dict()
     looked_away = 0
     analysis_result: dict[Emotions, int] = dict()
     brows_predictor = cv2.CascadeClassifier(
@@ -170,6 +198,17 @@ def analyze_several_frames(
                     analysis_result[
                         Emotions(emotion_model.dominant_emotion)
                     ] = 0
+                    best_confidence[
+                        Emotions(emotion_model.dominant_emotion)
+                    ] = -1
+                if best_confidence[Emotions(emotion_model.dominant_emotion)] < \
+                        emotion_model.face_confidence:
+                    best_performance_frame[
+                        Emotions(emotion_model.dominant_emotion)
+                    ] = frames[i]
+                    best_confidence[
+                        Emotions(emotion_model.dominant_emotion)
+                    ] = emotion_model.face_confidence
                 analysis_result[Emotions(emotion_model.dominant_emotion)] += 1
                 coordinates.append(
                     (
@@ -179,15 +218,6 @@ def analyze_several_frames(
                         ]
                     )
                 )
-                cv2.putText(
-                    frames[i],
-                    emotion_model.dominant_emotion,
-                    (0, 0),
-                    cv2.FONT_HERSHEY_PLAIN,
-                    0.9,
-                    (255, 0, 0), 
-                    3,       
-                )
             except ValidationError:
                 validationErrorsEncountered += 1
                 try:
@@ -195,6 +225,7 @@ def analyze_several_frames(
                     if Emotions(dominant) not in \
                             analysis_result.keys():
                         analysis_result[Emotions(dominant)] = 0
+                        best_confidence[Emotions(dominant)] = -1
                     analysis_result[Emotions(dominant)] += 1
                     coordinates.append(
                         (
@@ -204,15 +235,6 @@ def analyze_several_frames(
                             ]
                         )
                     )
-                    cv2.putText(
-                        frames[i],
-                        dominant,
-                        (0, 0),
-                        cv2.FONT_HERSHEY_PLAIN,
-                        0.9,
-                        (255, 0, 0), 
-                        3,       
-                    )
                 except KeyError:
                     continue
         i += 1
@@ -220,7 +242,7 @@ def analyze_several_frames(
         f'[INFO] Thread {thread} finished working. '
         f'Validation errors encountered: {validationErrorsEncountered}'
     )
-    return analysis_result, looked_away, coordinates
+    return analysis_result, looked_away, coordinates, best_performance_frame
 
 
 def generate_textual_report_from_result_dictionary(
@@ -269,6 +291,8 @@ def generate_latex_report_from_result_dictionary(
         looked_away: int,
         overall_frames_amount: int,
         coordinates: list[Tuple[int, float]],
+        best_performance_frames: dict,
+        filedest: str = None,
 ) -> None:
     """
     Following the gathered results, provide file output on emotional state.
@@ -330,8 +354,18 @@ def generate_latex_report_from_result_dictionary(
             plot_options = 'height=25cm, width=20cm'
             with document.create(Axis(options=plot_options)) as plot:
                 plot.append(Plot(name='emotional report', coordinates=coordinates))
+    with document.create(Section('Frame examples with discovered emotions')):
+        document.append('Below are the examples of emotions, discovered in the video.')
+        document.append('Some emotions are not present - that occures when that emotion was not detected on any frame.')
+        for emotion in best_performance_frames.keys():
+            for i in range(len(best_performance_frames[emotion])):
+                with document.create(Figure()) as picture:
+                    cv2.imwrite(f'{emotion}-{i}.jpg', best_performance_frames[emotion][i])
+                    picture.add_image(f'{emotion}-{i}.jpg', width='500px')
+                    picture.add_caption(f'Discovered emotion: {emotion}')
+
     document.generate_pdf(
-        filepath='emotional_report',
+        filepath='emotional_report' if filedest is None else filedest,
         clean_tex=False,
         compiler='pdflatex',
     )

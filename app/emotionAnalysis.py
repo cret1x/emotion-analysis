@@ -105,6 +105,7 @@ python emotionsAnalysis.py -i <file_destination> -t <threads_amount> -m <mode>
                     frame_analyzer._looked_away,
                     frame_analyzer._frames_amount,
                     frame_analyzer._coordinates,
+                    frame_analyzer._best_performance,
                 )
             except Exception as ex:
                 print(

@@ -10,6 +10,7 @@ from app.utils.utility_functions import get_percentages_from_results
 from starlette.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from app.utils.utility_functions import generate_latex_report_from_result_dictionary
+from sqlalchemy import func
 
 app = FastAPI()
 models.Base.metadata.create_all(bind=engine)
@@ -119,6 +120,7 @@ async def requestReport(credentials: S3CredentialsBase, db: db_dependency):
                 measurer._looked_away,
                 measurer._frames_amount,
                 measurer._coordinates,
+                measurer._best_performance,
             )
             return Response(content=str(reportResult.id), status_code=200)
     except Exception as ex:
@@ -150,5 +152,50 @@ async def getLastReport():
     pdf_bytes = open('emotional_report.pdf', 'rb').read()
     response = Response(content=pdf_bytes)
     response.headers['Content-Disposition'] = 'attachment; filename="emotional_report.pdf"'
+    response.headers['Content-Type'] = 'application/pdf'
+    return response
+
+
+@app.post("/uploadReport/")
+async def uploadLastReport(db: db_dependency):
+    lastReport = db.query(func.max(models.EmotionReportResults.id)).first()[0]
+    s3_client = boto3.client(
+        's3',
+        region_name='ru-central-1',
+        endpoint_url='http://127.0.0.1:9000',
+        aws_access_key_id='SECOND_USER',
+        aws_secret_access_key='SECOND_USER_SECRET',
+    )
+    buckets = s3_client.list_buckets().get('Buckets', list())
+    creationNeeded = True
+    for bucket in buckets:
+        if bucket['Name'] == 'results':
+            creationNeeded = False
+    if creationNeeded:
+        print('[INFO] Bucket non existent, need to create. Creating...')
+        s3_client.create_bucket(Bucket='results')
+    print('[INFO] Uploading file...')
+    s3_client.upload_file('emotional_report.pdf', 'results', f'result{lastReport}')
+    return Response(str(lastReport))
+
+
+@app.get("/getReportFromS3/{id}/")
+async def getReportFromS3(id: int):
+    s3_client = boto3.client(
+        's3',
+        region_name='ru-central-1',
+        endpoint_url='http://127.0.0.1:9000',
+        aws_access_key_id='SECOND_USER',
+        aws_secret_access_key='SECOND_USER_SECRET',
+    )
+    with open(f'result{id}.pdf', 'wb') as file:
+        s3_client.download_fileobj(
+            'results',
+            f'result{id}',
+            file,
+        )
+    pdf_bytes = open(f'result{id}.pdf', 'rb').read()
+    response = Response(content=pdf_bytes)
+    response.headers['Content-Disposition'] = f'attachment; filename="result{id}.pdf"'
     response.headers['Content-Type'] = 'application/pdf'
     return response
