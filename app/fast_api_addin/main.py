@@ -11,9 +11,13 @@ from starlette.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from app.utils.utility_functions import generate_latex_report_from_result_dictionary
 from sqlalchemy import func
+from prometheus_client import make_wsgi_app
 
 app = FastAPI()
 models.Base.metadata.create_all(bind=engine)
+
+metrics_app = make_asgi_app()
+app.mount("/metrics", metrics_app)
 
 origins = [
     "http://localhost:3000",
