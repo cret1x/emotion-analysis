@@ -5,8 +5,17 @@ services:
     build:
       context: ./app
       dockerfile: Dockerfile
+    environment:
+      - LOOKED_AWAY_THRESHOLD=7.5
+      - HAPPY_TO_ANGRY_DIFFERENCE_THRESHOLD=10.0
+      - HAPPY_TO_SAD_DIFFERENCE_THRESHOLD=10.0
+      - NEUTRAL_TO_SURPRISED_THRESHOLD=10.0
+      - FEAR_THRESHOLD=5.0
+      - HAPPY_THRESHOLD=20.0
+      - DISGUST_ANGRY_THRESHOLD=12.5
+      - SAD_THRESHOLD=15.0
     ports:
-      - "4040:4040"
+      - "3030:3000"
   frontend:
     container_name: node-frontend
     build:
