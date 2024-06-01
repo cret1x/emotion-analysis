@@ -11,9 +11,14 @@ from starlette.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from app.utils.utility_functions import generate_latex_report_from_result_dictionary
 from sqlalchemy import func
+from prometheus_client import make_wsgi_app
+import repository.report_repository
 
 app = FastAPI()
 models.Base.metadata.create_all(bind=engine)
+
+metrics_app = make_asgi_app()
+app.mount("/metrics", metrics_app)
 
 origins = [
     "http://localhost:3000",
@@ -88,40 +93,7 @@ async def requestReport(credentials: S3CredentialsBase, db: db_dependency):
             report = models.EmotionReports(
                 report_name=f'{credentials.bucket_name}-{credentials.key_name}'
             )
-            db.add(report)
-            db.commit()
-            db.refresh(report)
-            measurer = EmotionsMeasurer('video.mp4', None, '')
-            measurer.analyse_prepared_video()
-            percentages = get_percentages_from_results(
-                measurer._emotions_occurances,
-                measurer._looked_away,
-                measurer._frames_amount
-            )
-            reportResult = models.EmotionReportResults(reportId=report.id)
-            db.add(reportResult)
-            db.commit()
-            db.refresh(reportResult)
-            reportResultData = models.EmotionReportData(
-                reportResultId=reportResult.id,
-                neutral=percentages['neutral'],
-                sad=percentages['sad'],
-                happy=percentages['happy'],
-                disgust=percentages['disgust'],
-                surprise=percentages['surprise'],
-                fear=percentages['fear'],
-                angry=percentages['angry'],
-                lookedAway=percentages['lookedAway'],
-            )
-            db.add(reportResultData)
-            db.commit()
-            generate_latex_report_from_result_dictionary(
-                measurer._emotions_occurances,
-                measurer._looked_away,
-                measurer._frames_amount,
-                measurer._coordinates,
-                measurer._best_performance,
-            )
+            reportResult = report_repository.addReportResults(report, db)
             return Response(content=str(reportResult.id), status_code=200)
     except Exception as ex:
         return Response(content=ex, status_code=404)
@@ -129,20 +101,14 @@ async def requestReport(credentials: S3CredentialsBase, db: db_dependency):
 
 @app.get("/getReportResult/{reportResultId}/", response_model=ReportResultsBase)
 async def getReportResult(reportResultId: int, db: db_dependency):
-    result = db.query(
-        models.EmotionReportData
-    ).filter(
-        models.EmotionReportData.reportResultId == reportResultId
-    ).first()
+    result = report_repository.getReportResult(db)
     if not result:
         raise HTTPException(status_code=404, detail='No such report result.')
     return result
 
 @app.get("/getReportResults/", response_model=List[ReportResultsBase])
 async def getReportResults(db: db_dependency):
-    result = db.query(
-        models.EmotionReportData
-    )
+    result = report_repository.getReportResults(db)
     if not result:
         return Response(content='No reports', status_code=404)
     return result

@@ -2,6 +2,7 @@ absl-py==2.1.0
 annotated-types==0.6.0
 anyio==4.3.0
 astunparse==1.6.3
+prometheus_client
 attrs==18.2.0
 beautifulsoup4==4.12.3
 bleach==6.1.0
